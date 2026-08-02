@@ -21,7 +21,7 @@ Backend service that models the lifecycle of a logistics quote as an explicit, e
 
 Most systems model a record's lifecycle as a loosely-typed `status` field, which allows invalid jumps (e.g., a rejected quote silently becoming approved) and gives you no record of *how* it got there. QuoteFlow takes a stricter approach: every quote moves through an explicitly defined state machine, every transition is validated before it's persisted, and every transition is written to an immutable audit log — so the full history of any quote can always be reconstructed.
 
-The project was built as a self-contained reference implementation of production backend patterns: isolated business logic, type-safe data access, atomic transactional writes, and a GraphQL API layer — end to end, deployed and demoable.
+The project was built as a self-contained reference implementation of production backend patterns: isolated business logic, type-safe data access, atomic transactional writes, and a GraphQL API layer.
 
 ## Table of Contents
 
@@ -34,7 +34,6 @@ The project was built as a self-contained reference implementation of production
 - [Testing](#testing)
 - [Project Structure](#project-structure)
 - [Roadmap](#roadmap)
-- [License](#license)
 
 ## State Machine
 
