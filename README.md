@@ -41,9 +41,9 @@ Every quote moves through a fixed set of states. Transitions not shown below are
 
 ```
  draft ──▶ submitted ──▶ under_review ──┬──▶ approved
-                │                       │
-                │                       └──▶ rejected
-                │
+                │                        │
+                │                        └──▶ rejected
+                │                             |
                 └──▶ expired ◀───────────────┘
 ```
 
