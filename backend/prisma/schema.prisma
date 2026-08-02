@@ -1,0 +1,35 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Quote {
+  id                String            @id @default(uuid())
+  reference_code    String            @unique
+  origin            String
+  destination       String
+  cargo_description String
+  weight_kg         Decimal
+  proposed_rate     Decimal
+  currency          String
+  status            String            @default("draft") // draft, submitted, under_review, approved, rejected, expired
+  created_by        String
+  created_at        DateTime          @default(now())
+  updated_at        DateTime          @updatedAt
+  transitions       QuoteTransition[]
+}
+
+model QuoteTransition {
+  id              String   @id @default(uuid())
+  quote_id        String
+  quote           Quote    @relation(fields: [quote_id], references: [id])
+  from_status     String?
+  to_status       String
+  actor           String
+  note            String?
+  transitioned_at DateTime @default(now())
+}
