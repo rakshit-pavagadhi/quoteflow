@@ -72,22 +72,22 @@ Every quote moves through a fixed set of states. Transitions not shown below are
 
 ```
 ┌───────────────┐   GraphQL over HTTPS   ┌────────────────────┐
-│  React Client  │ ─────────────────────▶ │   Apollo Server     │
-│  (Kanban UI)   │ ◀───────────────────── │   (Express)          │
-└───────────────┘                        └──────────┬───────────┘
+│  React Client │ ─────────────────────▶│    Apollo Server   │ 
+│  (Kanban UI)  │ ◀─────────────────────│     (Express)      │
+└───────────────┘                        └──────────┬─────────┘
                                                        │
                                           ┌────────────▼────────────┐
-                                          │  State Machine Module    │
-                                          │  (pure logic, no I/O)    │
+                                          │  State Machine Module   |
+                                          │  (pure logic, no I/O)   |
                                           └────────────┬────────────┘
                                                        │
                                           ┌────────────▼────────────┐
-                                          │   Prisma Data Layer      │
+                                          │   Prisma Data Layer     │
                                           └────────────┬────────────┘
                                                        │
                                           ┌────────────▼────────────┐
-                                          │   PostgreSQL (Render)    │
-                                          └───────────────────────────┘
+                                          │   PostgreSQL (Render)   │
+                                          └─────────────────────────┘
 ```
 
 ## Key Design Decisions
