@@ -1,22 +1,27 @@
 import { PrismaClient } from '@prisma/client';
 import { validateTransition, QuoteStatus } from '../stateMachine';
+import { getOrSet, invalidatePattern } from '../cache';
 
 const prisma = new PrismaClient();
 
-// Helper to generate reference codes
 const generateRefCode = () => `QF-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
 
 export const resolvers = {
   Query: {
     quote: async (_: any, { id }: { id: string }) => {
-      return await prisma.quote.findUnique({ where: { id } });
+      return await getOrSet(`quote:${id}`, 30, async () => {
+        return await prisma.quote.findUnique({ where: { id } });
+      });
     },
     quotes: async (_: any, { status, limit = 50, offset = 0 }: { status?: string, limit?: number, offset?: number }) => {
-      return await prisma.quote.findMany({
-        where: status ? { status } : undefined,
-        take: limit,
-        skip: offset,
-        orderBy: { updated_at: 'desc' }
+      const cacheKey = `quotes:${status || 'all'}:${limit}:${offset}`;
+      return await getOrSet(cacheKey, 30, async () => {
+        return await prisma.quote.findMany({
+          where: status ? { status } : undefined,
+          take: limit,
+          skip: offset,
+          orderBy: { updated_at: 'desc' }
+        });
       });
     },
     quoteHistory: async (_: any, { quoteId }: { quoteId: string }) => {
@@ -29,12 +34,10 @@ export const resolvers = {
   
   Mutation: {
     createQuote: async (_: any, { input }: { input: any }) => {
-      // Validate initial creation (null -> draft)
       validateTransition(null, 'draft');
 
-      // Create quote and initial transition atomically
-      return await prisma.$transaction(async (tx:any) => {
-        const quote = await tx.quote.create({
+      const quote = await prisma.$transaction(async (tx: any) => {
+        const q = await tx.quote.create({
           data: {
             ...input,
             reference_code: generateRefCode(),
@@ -44,7 +47,7 @@ export const resolvers = {
 
         await tx.quoteTransition.create({
           data: {
-            quote_id: quote.id,
+            quote_id: q.id,
             from_status: null,
             to_status: 'draft',
             actor: input.created_by,
@@ -52,20 +55,23 @@ export const resolvers = {
           }
         });
 
-        return quote;
+        return q;
       });
+
+      // Invalidate list cache
+      await invalidatePattern('quotes:*');
+
+      return quote;
     },
 
     transitionQuote: async (_: any, { id, toStatus, actor, note }: { id: string, toStatus: QuoteStatus, actor: string, note?: string }) => {
-      return await prisma.$transaction(async (tx:any) => {
+      const updatedQuote = await prisma.$transaction(async (tx: any) => {
         const quote = await tx.quote.findUnique({ where: { id } });
-        if (!quote) throw new Error(`Quote \${id} not found`);
+        if (!quote) throw new Error(`Quote ${id} not found`);
 
-        // Important: Use state machine to validate transition
         validateTransition(quote.status as QuoteStatus, toStatus);
 
-        // Update status and insert audit log
-        const updatedQuote = await tx.quote.update({
+        const updated = await tx.quote.update({
           where: { id },
           data: { status: toStatus }
         });
@@ -80,12 +86,17 @@ export const resolvers = {
           }
         });
 
-        return updatedQuote;
+        return updated;
       });
+
+      // Invalidate list caches and specific quote cache
+      await invalidatePattern('quotes:*');
+      await invalidatePattern(`quote:${id}`);
+
+      return updatedQuote;
     },
 
     expireStaleQuotes: async () => {
-      // Find all quotes in submitted or under_review state older than 7 days
       const sevenDaysAgo = new Date();
       sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
 
@@ -102,7 +113,7 @@ export const resolvers = {
         try {
           validateTransition(quote.status as QuoteStatus, 'expired');
           
-          const expired = await prisma.$transaction(async (tx:any) => {
+          const expired = await prisma.$transaction(async (tx: any) => {
             const updated = await tx.quote.update({
               where: { id: quote.id },
               data: { status: 'expired' }
@@ -121,7 +132,15 @@ export const resolvers = {
           });
           expiredQuotes.push(expired);
         } catch (e) {
-          console.error(`Failed to expire quote \${quote.id}:`, e);
+          console.error(`Failed to expire quote ${quote.id}:`, e);
+        }
+      }
+
+      // Invalidate caches if any quotes expired
+      if (expiredQuotes.length > 0) {
+        await invalidatePattern('quotes:*');
+        for (const q of expiredQuotes) {
+          await invalidatePattern(`quote:${q.id}`);
         }
       }
 
